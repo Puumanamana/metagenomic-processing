@@ -140,6 +140,7 @@ CONTIGS.multiMap{it ->
     cov: it
     coconet: it
     metabat2: it
+    quast: it[1]
 }.set{ASSEMBLY}
 
 process CoverageIndex {
@@ -165,7 +166,7 @@ process Coverage {
     tuple(val(sample), file(paired_trimmed_fq), val(mode), file(index)) from FILTERED_FASTQ.coverage.combine(BWA_DB)
 
     output:
-    tuple(val(mode), file('coverage*.bam')) into COVERAGE 
+    tuple(val(mode), file('coverage*.bam')) into BAM
     
     script:
     """
@@ -174,17 +175,48 @@ process Coverage {
     """    
 }
 
-COVERAGE.groupTuple().multiMap{it ->
+BAM.groupTuple().multiMap{it ->
+    quast: it[1]
     coconet: it
-    metabat2: it}.set{FOR_BINNING}
+    metabat2: it}.set{COVERAGE}
 
-process CoCoNet {
-    tag {"binning-coconet-${mode}"}
-    publishDir params.outdir+"/4-binning", mode: "copy"
+process Quast {
+    tag {"quast"}
+    publishDir params.outdir+"/5-quast", mode: "copy"
     errorStrategy 'ignore'
 
     input:
-    tuple(val(mode), file(fasta), file(bams)) from ASSEMBLY.coconet.join(FOR_BINNING.coconet)
+    file f from ASSEMBLY.quast.collect()
+    file g from COVERAGE.quast.collect()
+
+    output:
+    file("*")
+
+    script:
+    def sp_modes = spades_modes.collect{it[0]}.join(' ')
+    def in_modes = input_modes.join(' ')
+    """
+    for sp_mode in $sp_modes; do
+      for input_mode in $in_modes; do
+        mode=\${sp_mode[0]}_\${input_mode} 
+        samtools merge coverage_\${mode}_merged.bam coverage_\${mode}_*.bam
+      done
+    done
+
+    bams=\$(ls -m *merged.bam | tr -d ' ' | tr -d '\\n')
+       
+    \${HOME}/.local/src/quast-5.0.2/quast.py -t ${task.cpus} -o output --bam \$bams *.fasta
+    find output -type f -exec mv {} . \\;
+    """    
+}
+
+process CoCoNet {
+    tag {"binning-coconet-${mode}"}
+    publishDir params.outdir+"/6-binning", mode: "copy"
+    errorStrategy 'ignore'
+
+    input:
+    tuple(val(mode), file(fasta), file(bams)) from ASSEMBLY.coconet.join(COVERAGE.coconet)
 
     output:
     file('coconet_bins*.csv') into COCONET_BINS
@@ -198,18 +230,20 @@ process CoCoNet {
 
 process Metabat2 {
     tag {"binning-metabat2-${mode}"}
-    publishDir params.outdir+"/4-binning", mode: "copy"
+    publishDir params.outdir+"/6-binning", mode: "copy"
     container "metabat/metabat"
 
     input:
-    tuple(val(mode), file(fasta), file(bams)) from ASSEMBLY.metabat2.join(FOR_BINNING.metabat2)
+    tuple(val(mode), file(fasta), file(bams)) from ASSEMBLY.metabat2.join(COVERAGE.metabat2)
 
     output:
     file('metabat2_bins*.csv') into METABAT2_BINS
 
     script:
     """
-    runMetaBat.sh -l ${fasta} ${bams} --saveCls -o metabat_output
-    # mv *metabat* metabat2_outputs
+    runMetaBat.sh --saveCls ${fasta} ${bams}
+    mv *metabat-bins*/bin metabat2_bins_${mode}.csv
     """
 }
+
+// Annotation with Prokka
