@@ -1,5 +1,5 @@
 spades_modes = [['spades', ''], ['metaspades', '--meta']]
-input_modes = ['paired-only', 'all']
+input_modes = ['paired-only']
 
 Channel.fromFilePairs(params.reads)
     .multiMap{it ->
@@ -50,21 +50,29 @@ process Trimming {
 
     output:
     tuple val(sample), file("*_paired_R*.fastq.gz"), file("*_unpaired.fastq.gz") into TRIMMED_FASTQ
+    file("*.html")
 
     script:
     """
     #!/usr/bin/env bash
 
-    [ "${params.adapters}" = "null" ] && args="" || args="ILLUMINACLIP:${params.adapters}:2:30:10:2:keepBothReads"
-    args=""
+    fastp --trim_poly_g -w ${task.cpus} -q 20 --cut_front --cut_tail --cut_mean_quality 15 \
+          -i ${fastqs[0]} -I ${fastqs[1]} \
+          -o ${sample}_paired_R1.fastq.gz -O ${sample}_paired_R2.fastq.gz \
+          --unpaired1 ${sample}_unpaired.fastq.gz
 
-    java -jar ${HOME}/.local/src/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${task.cpus} \
-        ${fastqs} \
-        ${sample}_paired_R1.fastq.gz ${sample}_unpaired_R1.fastq.gz \
-	${sample}_paired_R2.fastq.gz ${sample}_unpaired_R2.fastq.gz \
-	\$args LEADING:3 MINLEN:100 
+    mv fastp.html fastp_${sample}.html
 
-    cat *_unpaired_R*.fastq.gz > ${sample}_unpaired.fastq.gz
+    # [ "${params.adapters}" = "null" ] && args="" || args="ILLUMINACLIP:${params.adapters}:2:30:10:2:keepBothReads"
+    # args=""
+
+    # java -jar ${HOME}/.local/src/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${task.cpus} \
+    #     ${fastqs} \
+    #     ${sample}_paired_R1.fastq.gz ${sample}_unpaired_R1.fastq.gz \
+    #     ${sample}_paired_R2.fastq.gz ${sample}_unpaired_R2.fastq.gz \
+    #     \$args LEADING:3 MINLEN:100 
+
+    # cat *_unpaired_R*.fastq.gz > ${sample}_unpaired.fastq.gz
     """
 }
 
