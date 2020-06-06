@@ -66,7 +66,7 @@ process Trimming {
     # [ "${params.adapters}" = "null" ] && args="" || args="ILLUMINACLIP:${params.adapters}:2:30:10:2:keepBothReads"
     # args=""
 
-    # java -jar ${HOME}/.local/src/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${task.cpus} \
+    # java -jar /opt/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${task.cpus} \
     #     ${fastqs} \
     #     ${sample}_paired_R1.fastq.gz ${sample}_unpaired_R1.fastq.gz \
     #     ${sample}_paired_R2.fastq.gz ${sample}_unpaired_R2.fastq.gz \
@@ -133,10 +133,8 @@ process MetaspadesAssembly {
     cat *_paired_R2.fastq.gz > paired_R2.fastq.gz
     cat *_unpaired.fastq.gz > unpaired.fastq.gz
 
-    spades_path="${HOME}/.local/src/SPAdes-3.14.1-Linux/bin"
-    
     [ "${input_mode}" = "paired-only" ] && input_mode="" || input_mode="-s unpaired.fastq.gz"
-    \${spades_path}/spades.py ${assembly_mode[1]} -k 21,33,55,77 \
+    spades.py ${assembly_mode[1]} -k 21,33,55,77 \
         -1 paired_R1.fastq.gz -2 paired_R2.fastq.gz \$input_mode \
         -t ${task.cpus} -m 80 -o spades_output
 
