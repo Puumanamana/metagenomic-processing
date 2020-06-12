@@ -1,4 +1,4 @@
-spades_modes = [['spades', ''], ['metaspades', '--meta']]
+spades_modes = [['metaspades', '--meta']]
 input_modes = ['paired-only']
 
 Channel.fromFilePairs(params.reads)
@@ -136,7 +136,7 @@ process MetaspadesAssembly {
     [ "${input_mode}" = "paired-only" ] && input_mode="" || input_mode="-s unpaired.fastq.gz"
     spades.py ${assembly_mode[1]} -k 21,33,55,77 \
         -1 paired_R1.fastq.gz -2 paired_R2.fastq.gz \$input_mode \
-        -t ${task.cpus} -m 80 -o spades_output
+        -t ${task.cpus} -m ${task.memory.getGiga()} -o spades_output
 
     mv spades_output/scaffolds.fasta "assembly_${assembly_mode[0]}_${input_mode}.fasta"
     """    
