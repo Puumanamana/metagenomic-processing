@@ -97,6 +97,19 @@ RUN git clone --depth 1 https://github.com/ablab/quast.git \
 	&& cd ..
 
 #-------------------------------------------------#
+#                    Megahit                      #
+#-------------------------------------------------#
+
+RUN apt-get install -y cmake
+
+RUN wget -qO- https://github.com/voutcn/megahit/archive/v1.2.9.tar.gz \
+        | tar -xzf - && cd megahit-1.2.9 \
+        && mkdir build && cd build \
+        && cmake .. -DCMAKE_BUILD_TYPE=Release \
+        && make -j4 \
+        && make install
+
+#-------------------------------------------------#
 #    Environment variables and work directory      #
 #-------------------------------------------------#
 
