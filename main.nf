@@ -40,41 +40,60 @@ process PreMultiQC {
     """
 }
 
-process Trimming {
-    // Quality filter and trimming
-    tag { "trimmomatic-${sample}" }
-    publishDir params.outdir+"/1-trimming", mode: "copy"
+if (params.trimming == 'trimmomatic') {
+    process Trimmomatic {
+	// Quality filter and trimming
+	tag { "trimmomatic-${sample}" }
+	publishDir params.outdir+"/1-trimming", mode: "copy"
 
-    input:
-    tuple val(sample), file(fastqs) from RAW_FASTQ.trimming
+	input:
+	tuple val(sample), file(fastqs) from RAW_FASTQ.trimming
 
-    output:
-    tuple val(sample), file("*_paired_R*.fastq.gz"), file("*_unpaired.fastq.gz") into TRIMMED_FASTQ
-    file("*.html")
+	output:
+	tuple val(sample), file("*_paired_R*.fastq.gz"), file("*_unpaired.fastq.gz") into TRIMMED_FASTQ
 
-    script:
-    """
-    #!/usr/bin/env bash
+	script:
+	"""
+	#!/usr/bin/env bash
 
-    fastp --trim_poly_g -w ${task.cpus} -q 20 --cut_front --cut_tail --cut_mean_quality 15 \
-          -i ${fastqs[0]} -I ${fastqs[1]} \
-          -o ${sample}_paired_R1.fastq.gz -O ${sample}_paired_R2.fastq.gz \
-          --unpaired1 ${sample}_unpaired.fastq.gz
+	[ "${params.adapters}" = "null" ] && args="" || args="ILLUMINACLIP:${params.adapters}:2:30:10:2:keepBothReads"
+	args=""
 
-    mv fastp.html fastp_${sample}.html
+	java -jar /opt/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${task.cpus} \
+	     ${fastqs} \
+	     ${sample}_paired_R1.fastq.gz ${sample}_unpaired_R1.fastq.gz \
+	     ${sample}_paired_R2.fastq.gz ${sample}_unpaired_R2.fastq.gz \
+	     \$args LEADING:3 MINLEN:100 
 
-    # [ "${params.adapters}" = "null" ] && args="" || args="ILLUMINACLIP:${params.adapters}:2:30:10:2:keepBothReads"
-    # args=""
+	cat *_unpaired_R*.fastq.gz > ${sample}_unpaired.fastq.gz
+	"""
+    }
+} else {
+    process Fastp {
+	// Quality filter and trimming
+	tag { "fastp-${sample}" }
+	publishDir params.outdir+"/1-trimming", mode: "copy"
 
-    # java -jar /opt/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${task.cpus} \
-    #     ${fastqs} \
-    #     ${sample}_paired_R1.fastq.gz ${sample}_unpaired_R1.fastq.gz \
-    #     ${sample}_paired_R2.fastq.gz ${sample}_unpaired_R2.fastq.gz \
-    #     \$args LEADING:3 MINLEN:100 
+	input:
+	tuple val(sample), file(fastqs) from RAW_FASTQ.trimming
 
-    # cat *_unpaired_R*.fastq.gz > ${sample}_unpaired.fastq.gz
-    """
-}
+	output:
+	tuple val(sample), file("*_paired_R*.fastq.gz"), file("*_unpaired.fastq.gz") into TRIMMED_FASTQ
+	file("*.html")
+
+	script:
+	"""
+	#!/usr/bin/env bash
+
+	fastp --trim_poly_g -w ${task.cpus} -q 20 --cut_front --cut_tail --cut_mean_quality 15 \
+	      -i ${fastqs[0]} -I ${fastqs[1]} \
+	      -o ${sample}_paired_R1.fastq.gz -O ${sample}_paired_R2.fastq.gz \
+	      --unpaired1 ${sample}_unpaired.fastq.gz
+
+	mv fastp.html fastp_${sample}.html
+	"""
+    }
+}  
 
 TRIMMED_FASTQ.multiMap{it ->
     qc: it
@@ -115,33 +134,57 @@ process PostMultiQC {
     """
 }
 
-process MetaspadesAssembly {
-    tag {"metaSPAdes"}
-    publishDir params.outdir+"/3-assemblies", mode: "copy"
+if (params.assembler == 'metaspades') {
+    process MetaspadesAssembly {
+	tag {"metaSPAdes"}
+	publishDir params.outdir+"/3-assemblies", mode: "copy"
 
-    input:
-    each assembly_mode from spades_modes
-    each input_mode from input_modes
-    file f from FILTERED_FASTQ.assembly.collect()
+	input:
+	each assembly_mode from spades_modes
+	each input_mode from input_modes
+	file f from FILTERED_FASTQ.assembly.collect()
 
-    output:
-    tuple(val("${assembly_mode[0]}_${input_mode}"), file("assembly_*.fasta")) into CONTIGS
+	output:
+	tuple(val("${assembly_mode[0]}_${input_mode}"), file("assembly_*.fasta")) into CONTIGS
     
-    script:
-    """
-    cat *_paired_R1.fastq.gz > paired_R1.fastq.gz
-    cat *_paired_R2.fastq.gz > paired_R2.fastq.gz
-    cat *_unpaired.fastq.gz > unpaired.fastq.gz
+	script:
+	"""
+	cat *_paired_R1.fastq.gz > paired_R1.fastq.gz
+	cat *_paired_R2.fastq.gz > paired_R2.fastq.gz
+	cat *_unpaired.fastq.gz > unpaired.fastq.gz
 
-    [ "${input_mode}" = "paired-only" ] && input_mode="" || input_mode="-s unpaired.fastq.gz"
-    spades.py ${assembly_mode[1]} -k 21,33,55,77 \
-        -1 paired_R1.fastq.gz -2 paired_R2.fastq.gz \$input_mode \
-        -t ${task.cpus} -m ${task.memory.getGiga()} -o spades_output
+	[ "${input_mode}" = "paired-only" ] && input_mode="" || input_mode="-s unpaired.fastq.gz"
+	spades.py ${assembly_mode[1]} -k 21,33,55,77 \
+	    -1 paired_R1.fastq.gz -2 paired_R2.fastq.gz \$input_mode \
+	    -t ${task.cpus} -m ${task.memory.getGiga()} -o spades_output
 
-    mv spades_output/scaffolds.fasta "assembly_${assembly_mode[0]}_${input_mode}.fasta"
-    """    
+	mv spades_output/scaffolds.fasta "assembly_${assembly_mode[0]}_${input_mode}.fasta"
+	"""    
+    }
+} else {
+    process MegahitAssembly {
+	tag {"megahit"}
+	publishDir params.outdir+"/3-assemblies", mode: "copy"
+
+	input:
+	file f from FILTERED_FASTQ.assembly.collect()
+
+	output:
+	tuple(val('megahit'), file("assembly_*.fasta")) into CONTIGS
+    
+	script:
+	"""
+        fwd=\$(ls -m *_paired_R1.fastq.gz | tr -d ' ' | tr -d '\\n')
+        rev=\$(ls -m *_paired_R2.fastq.gz | tr -d ' ' | tr -d '\\n')
+
+	megahit -o megahit_out -1 \$fwd -2 \$rev
+
+	mv megahit_out/final.contigs.fa assembly_megahit.fasta
+	"""    
+    }
+    
 }
-
+    
 CONTIGS.multiMap{it ->
     cov: it
     coconet: it
@@ -193,7 +236,7 @@ process Quast {
 
     input:
     file f from ASSEMBLY.quast.collect()
-    file g from COVERAGE.quast.collect()
+    // file g from COVERAGE.quast.collect()
 
     output:
     file("*")
@@ -202,16 +245,16 @@ process Quast {
     def sp_modes = spades_modes.collect{it[0]}.join(' ')
     def in_modes = input_modes.join(' ')
     """
-    for sp_mode in $sp_modes; do
-      for input_mode in $in_modes; do
-        mode=\${sp_mode[0]}_\${input_mode} 
-        samtools merge coverage_\${mode}_merged.bam coverage_\${mode}_*.bam
-      done
-    done
+    # for sp_mode in $sp_modes; do
+    #   for input_mode in $in_modes; do
+    #     mode=\${sp_mode[0]}_\${input_mode} 
+    #     samtools merge coverage_\${mode}_merged.bam coverage_\${mode}_*.bam
+    #   done
+    # done
 
-    bams=\$(ls -m *merged.bam | tr -d ' ' | tr -d '\\n')
+    # bams=\$(ls -m *merged.bam | tr -d ' ' | tr -d '\\n')
        
-    \${HOME}/.local/src/quast-5.0.2/quast.py -t ${task.cpus} -o output --bam \$bams *.fasta
+    \${HOME}/.local/src/quast-5.0.2/quast.py -t ${task.cpus} -o output *.fasta
     find output -type f -exec mv {} . \\;
     """    
 }
