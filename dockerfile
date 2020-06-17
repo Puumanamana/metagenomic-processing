@@ -3,22 +3,36 @@ MAINTAINER Cedric Arisdakessian <carisdak@hawaii.edu>
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y apt-transport-https software-properties-common wget unzip nano emacs procps default-jre
+RUN apt-get update && apt-get install -y \
+	apt-transport-https \
+	software-properties-common \
+	cmake \
+	wget \
+	git \
+	unzip \
+	procps \
+	default-jre \
+	libncurses-dev \
+	libbz2-dev \
+	liblzma-dev \
+	pkg-config \
+	libfreetype6-dev \
+	libpng-dev \
+	libdatetime-perl \
+	libxml-simple-perl \
+	libdigest-md5-perl \
+	bioperl
 
 #-------------------------------------------------#
 #                  Python packages                #
 #-------------------------------------------------#
 
-# RUN apt-get update && apt-get install -y python3 python3-pip
-# RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.8 1
 RUN pip3 install --upgrade pip
 RUN pip3 install ipython coconet-binning multiqc
 
 #-------------------------------------------------#
 #                    Samtools                     #
 #-------------------------------------------------#
-
-RUN apt-get install -y libncurses-dev libbz2-dev liblzma-dev
 
 RUN wget https://github.com/samtools/samtools/releases/download/1.10/samtools-1.10.tar.bz2 \
 	&& tar -xvjf samtools-1.10.tar.bz2 && cd samtools-1.10 \
@@ -91,7 +105,6 @@ RUN wget https://github.com/ablab/spades/releases/download/v3.14.1/SPAdes-3.14.1
 #                     Quast                       #
 #-------------------------------------------------#
 
-RUN apt-get install -y pkg-config libfreetype6-dev libpng-dev git
 RUN git clone --depth 1 https://github.com/ablab/quast.git \
 	&& cd quast && python3 setup.py install \
 	&& cd ..
@@ -99,8 +112,6 @@ RUN git clone --depth 1 https://github.com/ablab/quast.git \
 #-------------------------------------------------#
 #                    Megahit                      #
 #-------------------------------------------------#
-
-RUN apt-get install -y cmake
 
 RUN wget -qO- https://github.com/voutcn/megahit/archive/v1.2.9.tar.gz \
         | tar -xzf - && cd megahit-1.2.9 \
@@ -110,10 +121,20 @@ RUN wget -qO- https://github.com/voutcn/megahit/archive/v1.2.9.tar.gz \
         && make install
 
 #-------------------------------------------------#
+#                    Prokka                       #
+#-------------------------------------------------#
+
+RUN cpan App::cpanminus
+RUN cpanm -l perl5lib Time::Piece XML::Simple Digest::MD5 Module::Build
+RUN cpanm -l perl5lib Bio::AlignIO Bio::Root::Version Bio::SearchIO Bio::Seq Bio::SeqFeature::Generic Bio::SeqIO Bio::Tools::CodonTable Bio::Tools::GFF Bio::Tools::GuessSeqFormat --force
+RUN git clone https://github.com/tseemann/prokka.git /opt/prokka
+RUN /opt/prokka/bin/prokka --setupdb
+
+#-------------------------------------------------#
 #    Environment variables and work directory      #
 #-------------------------------------------------#
 
-ENV PATH="/opt/FastQC:/opt/SPAdes-3.14.1-Linux/bin:${PATH}"
+ENV PATH="/opt/FastQC:/opt/SPAdes-3.14.1-Linux/bin:${PATH}:/opt/prokka/bin"
 
 WORKDIR /workspace
 COPY . /workspace
