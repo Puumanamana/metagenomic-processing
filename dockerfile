@@ -131,10 +131,35 @@ RUN git clone https://github.com/tseemann/prokka.git /opt/prokka
 RUN /opt/prokka/bin/prokka --setupdb
 
 #-------------------------------------------------#
-#    Environment variables and work directory      #
+#                    Virsorter                    #
 #-------------------------------------------------#
 
-ENV PATH="/opt/FastQC:/opt/SPAdes-3.14.1-Linux/bin:${PATH}:/opt/prokka/bin"
+RUN apt-get install -y hmmer mcl
+RUN wget -qO- http://metagene.nig.ac.jp/metagene/mga_x86_64.tar.gz \
+    | tar -xz \
+    && mv mga_linux_ia64 /usr/local/bin/mga
+RUN wget -qO- http://www.drive5.com/muscle/downloads3.8.31/muscle3.8.31_i86linux32.tar.gz \
+    | tar -xz \
+    && mv muscle3.8.31_i86linux32 /usr/local/bin/muscle
+RUN wget -qO- http://github.com/bbuchfink/diamond/releases/download/v0.9.36/diamond-linux64.tar.gz \
+    | tar xz \
+    && mv diamond /usr/local/bin
+RUN wget -qO- ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/ncbi-blast-2.10.1+-x64-linux.tar.gz \
+    | tar -xz \
+    && mv ncbi-blast-2.10.1+ /opt
+RUN wget -qO- https://github.com/simroux/VirSorter/archive/v1.0.6.tar.gz \
+    | tar xz \
+    && cd VirSorter-1.0.6/Scripts && make clean && make && cd ../.. \
+    && mv VirSorter-1.0.6 /opt \
+    && ln -s /opt/VirSorter-1.0.6/wrapper_phage_contigs_sorter_iPlant.pl /usr/local/bin
+RUN cpanm -l --force Bio::Perl@1.007002 Parallel::ForkManager@1.17 List::MoreUtils@0.428
+RUN cpan File::Which
+
+#-------------------------------------------------#
+#    Environment variables and work directory     #
+#-------------------------------------------------#
+
+ENV PATH="/opt/FastQC:/opt/SPAdes-3.14.1-Linux/bin:${PATH}:/opt/prokka/bin:/opt/ncbi-blast-2.10.1+/bin:/opt/VirSorter-1.0.6/Scripts"
 
 WORKDIR /workspace
 COPY . /workspace

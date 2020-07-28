@@ -3,8 +3,8 @@ input_modes = ['paired-only']
 
 Channel.fromFilePairs(params.reads)
     .multiMap{it ->
-	qc: it
-	trimming: it}
+    qc: it
+    trimming: it}
     .set{RAW_FASTQ}
 
 process PreQC {
@@ -42,58 +42,71 @@ process PreMultiQC {
 
 if (params.trimming == 'trimmomatic') {
     process Trimmomatic {
-	// Quality filter and trimming
-	tag { "trimmomatic-${sample}" }
-	publishDir params.outdir+"/1-trimming", mode: "copy"
+        // Quality filter and trimming
+        tag { "trimmomatic-${sample}" }
+        publishDir params.outdir+"/1-trimming", mode: "copy"
 
-	input:
-	tuple val(sample), file(fastqs) from RAW_FASTQ.trimming
+        input:
+        tuple val(sample), file(fastqs) from RAW_FASTQ.trimming
 
-	output:
-	tuple val(sample), file("*_paired_R*.fastq.gz"), file("*_unpaired.fastq.gz") into TRIMMED_FASTQ
+        output:
+        tuple val(sample), file("*_paired_R*.fastq.gz"), file("*_unpaired.fastq.gz") into TRIMMED_FASTQ
 
-	script:
-	"""
-	#!/usr/bin/env bash
+        script:
+        """
+        #!/usr/bin/env bash
 
-	[ "${params.adapters}" = "null" ] && args="" || args="ILLUMINACLIP:${params.adapters}:2:30:10:2:keepBothReads"
-	args=""
+        [ "${params.adapters}" = "null" ] && args="" || args="ILLUMINACLIP:${params.adapters}:2:30:10:2:keepBothReads"
+        args=""
 
-	java -jar /opt/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${task.cpus} \
-	     ${fastqs} \
-	     ${sample}_paired_R1.fastq.gz ${sample}_unpaired_R1.fastq.gz \
-	     ${sample}_paired_R2.fastq.gz ${sample}_unpaired_R2.fastq.gz \
-	     \$args LEADING:3 MINLEN:100 
+        avg_read_len=\$(zcat ${fastqs[0]} | head -n 4000 | awk '{if(NR%4==2) {count++; bases += length} } END{print int(bases/count)}')
+        tl_crop=\$((\$avg_read_len-${params.tl_crop}))
 
-	cat *_unpaired_R*.fastq.gz > ${sample}_unpaired.fastq.gz
-	"""
+        java -jar /opt/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${task.cpus} \
+             ${fastqs} \
+             ${sample}_paired_R1.fastq.gz ${sample}_unpaired_R1.fastq.gz \
+             ${sample}_paired_R2.fastq.gz ${sample}_unpaired_R2.fastq.gz \
+             \$args MINLEN:${params.min_trim_len} \
+             AVGQUAL:${params.min_avg_qual} \
+             LEADING:${params.clip_qual} TRAILING:${params.clip_qual} \
+             SLIDINGWINDOW:${params.trim_win_len}:${params.trim_win_qual} \
+             HEADCROP:${params.hd_crop} CROP:\$tl_crop
+
+        cat *_unpaired_R*.fastq.gz > ${sample}_unpaired.fastq.gz
+        """
+    }
+} else if (params.trimming == 'fastp'){
+    process Fastp {
+        // Quality filter and trimming
+        tag { "fastp-${sample}" }
+        publishDir params.outdir+"/1-trimming", mode: "copy"
+
+        input:
+        tuple val(sample), file(fastqs) from RAW_FASTQ.trimming
+
+        output:
+        tuple val(sample), file("*_paired_R*.fastq.gz"), file("*_unpaired.fastq.gz") into TRIMMED_FASTQ
+        file("*.html")
+
+        script:
+        """
+        #!/usr/bin/env bash
+
+        fastp --trim_poly_g -w ${task.cpus} --average_qual ${params.min_avg_qual} \
+              --length_required ${params.min_trim_len} --cut_front --cut_tail \
+              --cut_mean_quality ${params.trim_win_qual} --cut_window_size ${params.trim_win_len} \
+              --trim_front1 ${params.hd_crop} --trim_tail1 ${params.tl_crop} \
+              -i ${fastqs[0]} -I ${fastqs[1]} \
+              -o ${sample}_paired_R1.fastq.gz -O ${sample}_paired_R2.fastq.gz \
+              --unpaired1 ${sample}_unpaired.fastq.gz
+
+        mv fastp.html fastp_${sample}.html
+        """
+
     }
 } else {
-    process Fastp {
-	// Quality filter and trimming
-	tag { "fastp-${sample}" }
-	publishDir params.outdir+"/1-trimming", mode: "copy"
-
-	input:
-	tuple val(sample), file(fastqs) from RAW_FASTQ.trimming
-
-	output:
-	tuple val(sample), file("*_paired_R*.fastq.gz"), file("*_unpaired.fastq.gz") into TRIMMED_FASTQ
-	file("*.html")
-
-	script:
-	"""
-	#!/usr/bin/env bash
-
-	fastp --trim_poly_g -w ${task.cpus} -q 20 --cut_front --cut_tail --cut_mean_quality 15 \
-	      -i ${fastqs[0]} -I ${fastqs[1]} \
-	      -o ${sample}_paired_R1.fastq.gz -O ${sample}_paired_R2.fastq.gz \
-	      --unpaired1 ${sample}_unpaired.fastq.gz
-
-	mv fastp.html fastp_${sample}.html
-	"""
-    }
-}  
+    RAW_FASTQ.trimming.set{TRIMMED_FASTQ}
+}
 
 TRIMMED_FASTQ.multiMap{it ->
     qc: it
@@ -130,7 +143,11 @@ process PostMultiQC {
 
     script:
     """
-    multiqc .
+    mkdir paired unpaired
+    mv *_paired_R*_fastqc.* paired/
+    mv *_unpaired_fastqc.* unpaired/
+    multiqc -n multiqc_report_paired.html paired/
+    multiqc -n multiqc_report_unpaired.html unpaired/
     """
 }
 
@@ -186,24 +203,26 @@ if (params.assembler == 'metaspades') {
 }
     
 CONTIGS.multiMap{it ->
-    cov: it
+    coverage: it
     coconet: it
     metabat2: it
     quast: it[1]
+    virsorter: it
+    annotation: it
 }.set{ASSEMBLY}
 
 process CoverageIndex {
     tag {"coverageIndex-${mode}"}
 
     input:
-    tuple(val(mode), file(assembly)) from ASSEMBLY.cov
+    tuple(val(mode), file(ctg)) from ASSEMBLY.coverage
 
     output:
     tuple(val(mode), file('db*')) into BWA_DB
 
     script:
     """
-    bwa index ${assembly} -p db
+    bwa index ${ctg} -p db
     """
 }
 
@@ -231,7 +250,7 @@ BAM.groupTuple().multiMap{it ->
 
 process Quast {
     tag {"quast"}
-    publishDir params.outdir+"/5-quast", mode: "copy"
+    publishDir params.outdir+"/5-assemblyQC", mode: "copy"
     errorStrategy 'ignore'
 
     input:
@@ -254,9 +273,42 @@ process Quast {
 
     # bams=\$(ls -m *merged.bam | tr -d ' ' | tr -d '\\n')
        
-    \${HOME}/.local/src/quast-5.0.2/quast.py -t ${task.cpus} -o output *.fasta
+    quast.py -t ${task.cpus} -o output *.fasta
     find output -type f -exec mv {} . \\;
     """    
+}
+
+process Download_db {
+    tag {"virsorter-db"}
+
+    output:
+    file('virsorter-data') into virsorter_db
+
+    script:
+    """
+    wget -qO- https://zenodo.org/record/1168727/files/virsorter-data-v2.tar.gz | tar xz
+    """    
+}
+
+process VirSorter {
+    tag {"virsorter-${mode}"}
+    publishDir params.outdir+"/5-assemblyQC", mode: "copy"
+    container 'cyverse/virsorter'
+
+    input:
+    tuple(val(mode), file(fasta)) from ASSEMBLY.virsorter
+    file(db) from virsorter_db
+
+    output:
+    file('virsorter_output/*')
+
+    script:
+    """
+    wrapper_phage_contigs_sorter_iPlant.pl -f ${fasta} --db 1 \
+        --wdir virsorter_output \
+        --ncpu ${task.cpus} \
+        --data-dir ${db}
+    """
 }
 
 process CoCoNet {
@@ -296,3 +348,39 @@ process Metabat2 {
 }
 
 // Annotation with Prokka
+process Annotation {
+    tag {"annotation-${mode}"}
+    publishDir params.outdir+"/7-annotation", mode: "copy"
+
+    input:
+    tuple(val(mode), file(fasta)) from ASSEMBLY.annotation
+
+    output:
+    file('prokka_out/*')
+
+    script:
+    """
+    prokka ${fasta} --outdir prokka_out \
+        --kingdom Viruses --metagenome \
+        --mincontiglen ${params.min_annot_len} \
+        --cpus ${task.cpus}
+    """
+}
+
+// write summary
+def summary = [:]
+summary['adapters'] = params.adapters
+summary['trimming tool'] = params.trimming
+summary['trimming window length'] = "${params.trim_win_len} bp"
+summary['trim_win window quality'] = params.trim_win_qual
+summary['trimming clipping min quality'] = params.clip_qual
+summary['min read length after trimming'] = "${params.min_trim_len} bp"
+summary['min read average quality'] = params.min_avg_qual
+summary['min contig length for annotation'] = "${params.min_annot_len} bp"
+summary['Head crop'] = "${params.hd_crop} bp"
+summary['Tail crop'] = "${params.tl_crop} bp"
+summary['assembler'] = params.assembler
+
+file(params.outdir).mkdir()
+summary_handle = file("${params.outdir}/parameters_summary.log")
+summary_handle << summary.collect { k,v -> "${k.padRight(50)}: $v" }.join("\n")
