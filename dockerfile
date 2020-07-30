@@ -94,14 +94,6 @@ RUN wget https://github.com/OpenGene/fastp/archive/v0.20.1.zip \
 	&& cd ..
 
 #-------------------------------------------------#
-#                    Spades                       #
-#-------------------------------------------------#
-
-RUN wget https://github.com/ablab/spades/releases/download/v3.14.1/SPAdes-3.14.1-Linux.tar.gz \
-	&& tar -xvzf SPAdes-3.14.1-Linux.tar.gz \
-	&& mv SPAdes-3.14.1-Linux /opt
-
-#-------------------------------------------------#
 #                     Quast                       #
 #-------------------------------------------------#
 
@@ -156,10 +148,24 @@ RUN cpanm -l --force Bio::Perl@1.007002 Parallel::ForkManager@1.17 List::MoreUti
 RUN cpan File::Which
 
 #-------------------------------------------------#
+#                    Spades                       #
+#-------------------------------------------------#
+
+RUN cd /opt && git clone https://github.com/ablab/spades.git && cd spades \
+    && git checkout metaviral_publication \
+    && ./assembler/spades_compile.sh
+
+RUN wget https://github.com/hyattpd/Prodigal/releases/download/v2.6.3/prodigal.linux \
+    && chmod +x prodigal.linux \
+    && mv prodigal.linux /usr/local/bin/prodigal
+
+RUN cd /opt && git clone https://github.com/ablab/viralVerify.git 
+
+#-------------------------------------------------#
 #    Environment variables and work directory     #
 #-------------------------------------------------#
 
-ENV PATH="/opt/FastQC:/opt/SPAdes-3.14.1-Linux/bin:${PATH}:/opt/prokka/bin:/opt/ncbi-blast-2.10.1+/bin:/opt/VirSorter-1.0.6/Scripts"
+ENV PATH="/opt/FastQC:/opt/spades/bin:${PATH}:/opt/prokka/bin:/opt/ncbi-blast-2.10.1+/bin:/opt/VirSorter-1.0.6/Scripts:/opt/viralVerify"
 
 WORKDIR /workspace
 COPY . /workspace

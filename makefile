@@ -9,6 +9,6 @@ test25k:
 test1M:
 	nextflow main.nf --reads "test_data/test_1M/*_R{1,2}.fastq.gz" -profile lani
 container:
-	sudo docker build -f dockerfile -t nakor/metagenome-assembly:$(RELEASE) .
+	sudo docker build -f conda_dockerfile -t nakor/metagenome-assembly:$(RELEASE) .
 	sudo docker push nakor/metagenome-assembly:$(RELEASE)
 	rm -rf  ~/.singularity_images.cache/nakor-metagenome-assembly*.img

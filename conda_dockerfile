@@ -1,0 +1,33 @@
+FROM continuumio/miniconda3:latest
+LABEL author="carisdak@hawaii.edu"
+
+RUN apt-get update && apt-get install -y procps git && apt-get clean -y
+
+COPY conda_env.yml /
+RUN conda env create -f /conda_env.yml && conda clean -a
+
+#-------------------------------------------------#
+#                  CoCoNet                        #
+#-------------------------------------------------#
+
+RUN pip install coconet-binning==0.5
+
+#-------------------------------------------------#
+#              MetaViralSPAdes                    #
+#-------------------------------------------------#
+
+RUN apt-get update && apt-get install -y build-essential cmake zlib1g-dev libbz2-dev
+
+RUN git clone https://github.com/ablab/spades.git -b metaviral_publication \
+    && mv spades /opt \
+    && cd /opt/spades \
+    && ./assembler/spades_compile.sh
+
+#-------------------------------------------------#
+#                ViralVerify                      #
+#-------------------------------------------------#
+
+RUN git clone https://github.com/ablab/viralVerify.git \
+    && mv viralVerify/* /opt/spades/bin
+
+ENV PATH /opt/spades/bin:/opt/conda/envs/wgs-processing/bin:$PATH
