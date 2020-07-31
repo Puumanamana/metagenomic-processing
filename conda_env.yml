@@ -2,6 +2,7 @@ name: wgs-processing
 channels:
   - conda-forge
   - bioconda
+  - pytorch
   - defaults
 dependencies:
   - python=3.7
@@ -21,4 +22,16 @@ dependencies:
   - bowtie2=2.4.1
   - kraken2=2.0.9beta
   - prodigal=2.6.3
+  - pyyaml=5.1.0
+  - pandas=1.1
+  - h5py=2.10.0
+  - bioawk=1.0
+  - biopython=1.77
+  - scikit-learn=0.23.1
+  - pytorch=1.6.0
+  - python-igraph=0.8.2
+  - leidenalg=0.8.1
+  - tqdm==4.48.0
+  - pip:
+      - coconet-binning==0.52
   

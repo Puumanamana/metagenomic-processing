@@ -1,5 +1,17 @@
 nextflow.enable.dsl = 2
 
+def save_parameters() {
+    def summary = [:]
+    summary['Virsorter database'] = params.virsorter_db
+    summary['Pfam database'] = params.pfam_db
+    summary['Kraken database'] = params.kraken_db
+    summary['Min length for annotation'] = params.min_annot_len
+    
+    file(params.outdir).mkdir()
+    summary_handle = file("${params.outdir}/annotation.log")
+    summary_handle << summary.collect { k,v -> "${k.padRight(50)}: $v" }.join("\n")
+}
+
 process dl_pfam_db {
     output:
     file('Pfam-A.hmm')
@@ -114,6 +126,8 @@ workflow annotation {
     // dl_kraken_db() | combine(data) | kraken2
     
     data | prokka
+
+    prokka.out.subscribe onComplete: {save_parameters()}
 }
 
 workflow {

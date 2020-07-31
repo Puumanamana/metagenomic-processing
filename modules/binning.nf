@@ -5,14 +5,14 @@ process coconet {
     publishDir "${params.outdir}/coconet", mode: 'copy'
 
     input:
-    tuple(file(fasta), file(bams))
+    tuple(file(fasta), file(bam), file(bai))
 
     output:
     file('coconet_bins*.csv') 
 
     script:
     """
-    coconet --fasta $fasta --coverage $bams --output output
+    coconet --fasta $fasta --coverage $bam --output output
     mv output/bins_*.csv coconet_bins.csv
     """
 }
@@ -22,14 +22,14 @@ process metabat2 {
     publishDir "${params.outdir}/metabat2", mode: 'copy'
 
     input:
-    tuple(file(fasta), file(bams))
+    tuple(file(fasta), file(bam), file(bai))
 
     output:
     file('metabat2_bins*.csv')
 
     script:
     """
-    runMetaBat.sh --saveCls $fasta $bams
+    runMetaBat.sh --saveCls $fasta $bam
     mv *metabat-bins*/bin metabat2_bins.csv
     """
 }

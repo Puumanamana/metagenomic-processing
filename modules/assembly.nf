@@ -1,8 +1,17 @@
 nextflow.enable.dsl = 2
 
+def save_parameters() {
+    def summary = [:]
+    summary['Assembler'] = params.assembler
+    summary['Co-assembly'] = !params.split_assembly
+    
+    file(params.outdir).mkdir()
+    summary_handle = file("${params.outdir}/assembler.log")
+    summary_handle << summary.collect { k,v -> "${k.padRight(50)}: $v" }.join("\n")
+}
+
 process spades {
     publishDir "${params.outdir}/${params.assembler}", mode: 'copy'
-    memory '100G'
     
     input:
 	tuple(val(sample), file(fastq))
@@ -83,6 +92,8 @@ workflow assembly {
     if (params.assembler == 'megahit') {reads | megahit | set{assembly}}
     else {reads | spades | set{assembly}}
     assembly | collect | quast
+
+    assembly.subscribe onComplete: {save_parameters()}
     
     emit: assembly
 }

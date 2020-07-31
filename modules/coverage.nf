@@ -20,12 +20,13 @@ process bwa {
     tuple(val(sample), file(fq), file(index))
 
     output:
-    file('coverage*.bam')
+    tuple(val(sample), file('coverage*.bam'), file('coverage*.bai'))
     
     script:
     """
     bwa mem -a -M -t 50 ref $fq \
         | samtools sort -@ $task.cpus -o coverage_${sample}.bam
+    samtools index -@ $task.cpus coverage_${sample}.bam coverage_${sample}.bai
     """    
 }
 
@@ -49,15 +50,30 @@ process bowtie2 {
     tuple(val(sample), file(fq), file(index))
 
     output:
-    file('coverage*.bam')
+    tuple(val(sample), file('coverage*.bam'), file('coverage*.bai'))
     
     script:
     """
     bowtie2 -p $task.cpus -x ref -1 ${fq[0]} -2 ${fq[1]} | \
-            samtools view -@ $task.cpus -bS | \
             samtools sort -@ $task.cpus -o ${sample}.bam
     samtools index -@ "$task.cpus ${sample}.bam ${sample}.bai
     """    
+}
+
+process aln_stats {
+    input:
+    tuple(val(sample), file(bam), file(bai), file(fasta), val(minLen))
+
+    output:
+    stdout
+
+    script:
+    """
+    bioawk -c fastx '{OFS="\\t"}{if (length(\$seq)>${minLen}) print \$name,1,length(\$seq)}' ${fasta} > ctg_list.bed
+    count=\$(samtools view -f1 -c -@ $task.cpus ${bam} -L ctg_list.bed)
+    
+    echo "3,${params.aligner} (>${minLen.toString().padLeft(4)} bp),${sample},\$count" | tr -d '\\n'
+    """
 }
 
 workflow coverage {
