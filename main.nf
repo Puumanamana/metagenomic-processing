@@ -363,6 +363,7 @@ process Annotation {
     prokka ${fasta} --outdir prokka_out \
         --kingdom Viruses --metagenome \
         --mincontiglen ${params.min_annot_len} \
+        --centre X --compliant \
         --cpus ${task.cpus}
     """
 }

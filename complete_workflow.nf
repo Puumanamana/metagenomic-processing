@@ -1,13 +1,5 @@
 nextflow.enable.dsl=2
 
-// Default cropping values
-// params.hd_crop ?: 0
-// params.tl_crop ?: 0
-// params.hd_crop_fwd ?: params.hd_crop
-// params.hd_crop_rev ?: params.hd_crop
-// params.tl_crop_fwd ?: params.tl_crop
-// params.tl_crop_rev ?: params.tl_crop
-
 include { reads_qc; trimming } from './modules/trimming.nf' addParams(outdir: "${params.outdir}/preprocessing")
 include { assembly } from './modules/assembly.nf' addParams(outdir: "${params.outdir}/assembly")
 include { coverage; aln_stats } from './modules/coverage.nf' addParams(outdir: "${params.outdir}/coverage")
@@ -30,6 +22,7 @@ process reshape_summary {
 
     table = pd.read_csv("${summary}", index_col=0, header=None, names=['step', 'sample', 'count'])
     table = table.pivot('sample', 'step', 'count').reindex(columns=table.step.unique())
+    table = table.applymap(lambda x: "{:,}k".format(int(x/1000)))
 
     table.to_csv('summary_table.csv')
     """
@@ -42,8 +35,8 @@ workflow wgs_analysis {
     reads | trimming | assembly
 
     if(params.split_assembly) {
-        assembly.out | join(trimming.out) | map{[it[1], it[0], it[2]]} | coverage
-        coverage.out | join(assembly.out) | set{coverage_and_assembly}
+        assembly.out | combine(trimming.out, by: 0) | map{[it[1], it[0], it[2]]} | coverage
+        coverage.out | combine(assembly.out, by: 0) | set{coverage_and_assembly}
     } else {
         assembly.out | map{it[1]} | combine(trimming.out) | coverage
         coverage.out | combine(assembly.out.map{it[1]}) | set{coverage_and_assembly}
@@ -55,8 +48,12 @@ workflow wgs_analysis {
     reads | map{"0,raw,${it[0]},${it[1][0].countFastq()}"} | set{raw_seq_counts}
     trimming.out | map{"1,trimming,${it[0]},${it[1][0].countFastq()}"} | set{trim_seq_counts}
     assembly.out | map{"2,${params.assembler},${it[0]},${it[1].countFasta()}"} | set{assembly_counts}
-    coverage_and_assembly | combine(Channel.from(0, 500, 1000, 2000, 5000)) | aln_stats
 
+    aln_stats(coverage_and_assembly,
+              [0, 1000, 2000, 5000], // min ctg lengths
+              ['mapped', 0], ['mapped in proper pair', 3], // flags
+              [0, 30, 50] // min mapping qualities
+    )
     
     raw_seq_counts| mix(trim_seq_counts, assembly_counts, aln_stats.out) \
         | collectFile(newLine: true, sort: true) \
@@ -64,6 +61,10 @@ workflow wgs_analysis {
 
 }
 
-workflow {    
+workflow {
     Channel.fromFilePairs(params.reads) | wgs_analysis
+}
+
+workflow test {
+    Channel.fromFilePairs("$baseDir/test_data/sample*_R{1,2}.fastq.gz") | wgs_analysis
 }

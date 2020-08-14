@@ -1,5 +1,11 @@
 nextflow.enable.dsl = 2
 
+// Default cropping values
+// params.hd_crop_fwd = params.hd_crop_fwd ?: params.hd_crop
+// params.hd_crop_rev = params.hd_crop_rev ?: params.hd_crop
+// params.tl_crop_fwd = params.tl_crop_fwd ?: params.tl_crop
+// params.tl_crop_rev = params.tl_crop_rev ?: params.tl_crop
+
 if ((params.hd_crop_fwd != 0) && (params.trimming == 'trimmomatic')) {
     println('Cannot use different cropping parameters for fwd and rev with trimmomatic')
     exit 1
@@ -91,7 +97,7 @@ process fastp {
 }
 
 process fastqc {
-    publishDir "${params.outdir}/readsQC/fastQC", pattern: "*.html", mode: 'copy'
+    publishDir "${params.outdir}/${task.process.replaceAll(':', '/')}", pattern: "*.html", mode: 'copy'
     
     input:
     tuple val(sample), file(fastq)
@@ -106,7 +112,7 @@ process fastqc {
 }
 
 process multiqc {
-    publishDir "${params.outdir}/readsQC/multiQC", pattern: "*.html", mode: 'move'
+    publishDir "${params.outdir}/${task.process.replaceAll(':', '/')}", pattern: "*.html", mode: 'copy'
     
     input:
     file(fastqs)
@@ -150,6 +156,9 @@ workflow trimming {
 }
 
 workflow {
-    fastqs = Channel.fromFilePairs(params.reads)
-    fastqs | (reads_qc & trimming)
+    Channel.fromFilePairs(params.reads) | (reads_qc & trimming)
+}
+
+workflow test {
+    Channel.fromFilePairs("$baseDir/../test_data/*_R{1,2}.fastq.gz") | (reads_qc & trimming)
 }

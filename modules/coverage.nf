@@ -62,17 +62,25 @@ process bowtie2 {
 
 process aln_stats {
     input:
-    tuple(val(sample), file(bam), file(bai), file(fasta), val(minLen))
+    tuple val(sample), file(bam), file(bai), file(fasta)
+    each minLen
+    each flag
+    each qual
 
     output:
     stdout
 
     script:
     """
-    bioawk -c fastx '{OFS="\\t"}{if (length(\$seq)>${minLen}) print \$name,1,length(\$seq)}' ${fasta} > ctg_list.bed
-    count=\$(samtools view -f1 -c -@ $task.cpus ${bam} -L ctg_list.bed)
+    #!/usr/bin/env bash
     
-    echo "3,${params.aligner} (>${minLen.toString().padLeft(4)} bp),${sample},\$count" | tr -d '\\n'
+    # -f 3 includes reads mapped in proper pair
+    # -F 2308 excludes supplementary alignments and unmapped reads
+
+    bioawk -c fastx '{OFS="\\t"}{if (length(\$seq)>$minLen) print \$name,1,length(\$seq)}' $fasta > ctg_list.bed
+    count=\$(samtools view -c -f ${flag[1]} -F 2308 -q $qual -@ $task.cpus $bam -L ctg_list.bed)
+    
+    echo "$params.aligner,>$minLen bp,$qual,${flag[1]},$sample,\$count" | tr -d '\\n'
     """
 }
 

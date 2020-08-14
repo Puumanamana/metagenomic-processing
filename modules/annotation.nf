@@ -24,7 +24,7 @@ process dl_pfam_db {
 }
 
 process viralverify {
-    publishDir "${params.outdir}/viralverify", mode: 'move'
+    publishDir "${params.outdir}/viralverify", mode: 'copy'
     input:
     tuple(file(db), file(fasta))
 
@@ -48,7 +48,7 @@ process dl_virsorter_db {
 }
 
 process virsorter {
-    publishDir "${params.outdir}/virsorter", mode: 'move'
+    publishDir "${params.outdir}/virsorter", mode: 'copy'
     container 'cyverse/virsorter'
 
     input:
@@ -67,7 +67,7 @@ process virsorter {
 }
 
 process prokka {
-    publishDir "${params.outdir}/prokka", mode: 'move'
+    publishDir "${params.outdir}/prokka", mode: 'copy'
     
     input:
     file(fasta)
@@ -80,6 +80,7 @@ process prokka {
     prokka $fasta --outdir prokka_out \
         --kingdom Viruses --metagenome \
         --mincontiglen ${params.min_annot_len} \
+        --centre X --compliant \
         --cpus $task.cpus
     """
 }
@@ -96,7 +97,7 @@ process dl_kraken2_db {
 }
 
 process kraken2 {
-    publishDir "${params.outdir}/kraken2", mode: 'move'
+    publishDir "${params.outdir}/kraken2", mode: 'copy'
     
     input:
     tuple(file(fasta), file(db))
@@ -125,9 +126,9 @@ workflow annotation {
 
     // dl_kraken_db() | combine(data) | kraken2
     
-    data | prokka
+    // data | prokka
 
-    prokka.out.subscribe onComplete: {save_parameters()}
+    viralverify.out.subscribe onComplete: {save_parameters()}
 }
 
 workflow {

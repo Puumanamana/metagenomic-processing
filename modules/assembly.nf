@@ -60,7 +60,7 @@ process megahit {
 }
 
 process quast {
-    publishDir "${params.outdir}/quast", mode: 'move'
+    publishDir "${params.outdir}/quast", mode: 'copy'
     errorStrategy 'ignore'
 
     input:
@@ -100,4 +100,8 @@ workflow assembly {
 
 workflow {
     Channel.fromFilePairs(params.reads) | assembly
+}
+
+workflow test {
+    Channel.fromFilePairs("$baseDir/../test_data/*_R{1,2}.fastq.gz") | assembly
 }
