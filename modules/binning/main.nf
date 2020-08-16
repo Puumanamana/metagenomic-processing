@@ -5,7 +5,9 @@ process coconet {
     publishDir "${params.outdir}/coconet", mode: 'copy'
 
     input:
-    tuple(file(fasta), file(bam), file(bai))
+    file(fasta)
+    file(bam)
+    file(bai)
 
     output:
     file('coconet_bins*.csv') 
@@ -18,12 +20,13 @@ process coconet {
 }
 
 process metabat2 {
-    container "metabat/metabat"
     publishDir "${params.outdir}/metabat2", mode: 'copy'
 
     input:
-    tuple(file(fasta), file(bam), file(bai))
-
+    file(fasta)
+    file(bam)
+    file(bai)
+    
     output:
     file('metabat2_bins*.csv')
 
@@ -35,13 +38,29 @@ process metabat2 {
 }
 
 workflow binning {
-    take: data
-    main: data | (metabat2 & coconet)
+    take:
+    fasta
+    bam
+    bai
+    
+    main:
+    metabat2(fasta, bam, bai)
+    coconet(fasta, bam, bai)    
 }
 
 workflow {
     fasta = Channel.fromPath(params.assembly)
-    coverage = Channel.fromPath(params.coverage).collect()
+    bam = Channel.fromPath(params.coverage)
+    bai = Channel.fromPath(params.coverage_index)
 
-    fasta | combine(coverage) | map{[it[0], it[1..-1]]} | binning
+    binning(fasta, bam.collect(), bai.collect())
 }
+
+workflow test {
+    fasta = Channel.fromPath("$baseDir/../../test_data/assembly.fasta")
+    bam = Channel.fromPath("$baseDir/../../test_data/*.bam")
+    bai = Channel.fromPath("$baseDir/../../test_data/*.bai")
+
+    binning(fasta, bam.collect(), bai.collect())
+}
+

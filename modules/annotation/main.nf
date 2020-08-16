@@ -2,7 +2,7 @@ nextflow.enable.dsl = 2
 
 def save_parameters() {
     def summary = [:]
-    summary['Virsorter database'] = params.virsorter_db
+    summary['Virsorter database'] = params.virsorter2_db
     summary['Pfam database'] = params.pfam_db
     summary['Kraken database'] = params.kraken_db
     summary['Min length for annotation'] = params.min_annot_len
@@ -13,6 +13,8 @@ def save_parameters() {
 }
 
 process dl_pfam_db {
+    publishDir "$HOME/db", mode: 'copy'
+    
     output:
     file('Pfam-A.hmm')
 
@@ -25,8 +27,10 @@ process dl_pfam_db {
 
 process viralverify {
     publishDir "${params.outdir}/viralverify", mode: 'copy'
+    
     input:
-    tuple(file(db), file(fasta))
+    path fasta
+    path db
 
     output:
     file('*')
@@ -37,40 +41,42 @@ process viralverify {
     """
 }
 
-process dl_virsorter_db {
+process dl_virsorter2_db {
+    publishDir "$HOME/db", mode: 'copy'
+
     output:
-    file('virsorter-data')
+    path 'virsorter2_db'
 
     script:
     """
-    wget -qO- https://zenodo.org/record/1168727/files/virsorter-data-v2.tar.gz | tar xz
+    virsorter setup -d virsorter2_db -j $task.cpus
     """    
 }
 
-process virsorter {
+process virsorter2 {
     publishDir "${params.outdir}/virsorter", mode: 'copy'
-    container 'cyverse/virsorter'
 
     input:
-    tuple(file(db), file(fasta))
+    path fasta
+    path db
 
     output:
-    file('virsorter_output/*')
+    file('virsorter_output')
 
     script:
     """
-    wrapper_phage_contigs_sorter_iPlant.pl -f $fasta --db 1 \
-        --wdir virsorter_output \
-        --ncpu $task.cpus \
-        --data-dir $db
+    #!/usr/bin/env bash
+
+    virsorter run -w virsorter_output -i $fasta -j $task.cpus -d $db
     """
 }
 
 process prokka {
+    errorStrategy 'ignore'
     publishDir "${params.outdir}/prokka", mode: 'copy'
     
     input:
-    file(fasta)
+    path fasta
 
     output:
     file('prokka_out/*')
@@ -86,8 +92,11 @@ process prokka {
 }
 
 process dl_kraken2_db {
+    errorStrategy 'ignore'
+    
     input:
-    tuple(file(fasta), file(db))
+    path fasta
+    path db
 
     output:
 
@@ -98,9 +107,11 @@ process dl_kraken2_db {
 
 process kraken2 {
     publishDir "${params.outdir}/kraken2", mode: 'copy'
+    errorStrategy 'ignore'
     
     input:
-    tuple(file(fasta), file(db))
+    path fasta
+    path db
 
     output:
 
@@ -110,27 +121,29 @@ process kraken2 {
 }
 
 workflow annotation {
-    // data is a fasta channel
-    take: data
+    take: fasta
     
     main:
-    if (params.virsorter_db !='null') { Channel.fromPath(params.virsorter_db) | set {vs_db} }
-    else { dl_virsorter_db() | set {vs_db} }
+    if (params.virsorter2_db !='null') { Channel.fromPath(params.virsorter2_db) | set {vs2_db} }
+    else { dl_virsorter2_db() | set {vs2_db} }
  
-    vs_db | combine(data) | virsorter
+    virsorter2(fasta, vs2_db)
 
     if (params.pfam_db !='null') { Channel.fromPath(params.pfam_db) | set {pfam_db} }
     else { dl_pfam_db() | set {pfam_db} }
 
-    pfam_db | combine(data) | viralverify
+    viralverify(fasta, pfam_db)
 
     // dl_kraken_db() | combine(data) | kraken2
     
-    // data | prokka
-
+    prokka(fasta)
     viralverify.out.subscribe onComplete: {save_parameters()}
 }
 
 workflow {
-    Channel.fromPath(params.assembly) | annotation
+   annotation(params.assembly)
+}
+
+workflow test {
+    annotation("$baseDir/../../test_data/assembly.fasta")
 }

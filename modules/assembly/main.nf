@@ -3,7 +3,7 @@ nextflow.enable.dsl = 2
 def save_parameters() {
     def summary = [:]
     summary['Assembler'] = params.assembler
-    summary['Co-assembly'] = !params.split_assembly
+    summary['Co-assembly'] = params.coassembly
     
     file(params.outdir).mkdir()
     summary_handle = file("${params.outdir}/assembler.log")
@@ -81,16 +81,16 @@ workflow assembly {
     take: data
 
     main:
-    if(params.split_assembly) {
-        reads = data
-    } else {
+    if(params.coassembly) {
+        // concatenate forward and reverse fastqs
         data | transpose | collectFile(sort: true) {
             it -> ["all_" + (it[1].getSimpleName() =~/_[^_]*/)[-1][1..-1] + ".fastq.gz", it[1]]
         } | map{['pool', it]} | groupTuple | set{reads}
+    } else {
+        reads = data
     }
-    
-    if (params.assembler == 'megahit') {reads | megahit | set{assembly}}
-    else {reads | spades | set{assembly}}
+
+    assembly = params.assembler == 'megahit' ? reads | megahit : reads | spades
     assembly | collect | quast
 
     assembly.subscribe onComplete: {save_parameters()}
@@ -103,5 +103,5 @@ workflow {
 }
 
 workflow test {
-    Channel.fromFilePairs("$baseDir/../test_data/*_R{1,2}.fastq.gz") | assembly
+    Channel.fromFilePairs("$baseDir/../../test_data/*_R{1,2}.fastq.gz") | assembly
 }

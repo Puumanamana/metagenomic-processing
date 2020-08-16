@@ -160,5 +160,5 @@ workflow {
 }
 
 workflow test {
-    Channel.fromFilePairs("$baseDir/../test_data/*_R{1,2}.fastq.gz") | (reads_qc & trimming)
+    Channel.fromFilePairs("$baseDir/../../test_data/*_R{1,2}.fastq.gz") | (reads_qc & trimming)
 }
