@@ -27,6 +27,7 @@ process dl_pfam_db {
 
 process viralverify {
     publishDir "${params.outdir}/viralverify", mode: 'copy'
+    container 'nakor/metagenome-assembly'
     
     input:
     path fasta
@@ -43,6 +44,7 @@ process viralverify {
 
 process dl_virsorter2_db {
     publishDir "$HOME/db", mode: 'copy'
+    container 'nakor/metagenome-assembly'
 
     output:
     path 'virsorter2_db'
@@ -55,6 +57,7 @@ process dl_virsorter2_db {
 
 process virsorter2 {
     publishDir "${params.outdir}/virsorter", mode: 'copy'
+    container 'nakor/metagenome-assembly'
 
     input:
     path fasta
@@ -74,6 +77,7 @@ process virsorter2 {
 process prokka {
     errorStrategy 'ignore'
     publishDir "${params.outdir}/prokka", mode: 'copy'
+    container 'nakor/metagenome-assembly'
     
     input:
     path fasta

@@ -1,6 +1,8 @@
 nextflow.enable.dsl = 2
 
 process bwa_index {
+    container 'nakor/metagenome-assembly'
+    
     input:
     tuple val(label), path(assembly)
 
@@ -15,6 +17,7 @@ process bwa_index {
 
 process bwa {
     publishDir params.outdir, mode: 'copy'
+    container 'nakor/metagenome-assembly'
     
     input:
     tuple val(sample), path(fastq), path(index)
@@ -33,6 +36,7 @@ process bwa {
 
 process aln_stats {
     publishDir params.outdir, mode: 'copy'
+    container 'nakor/metagenome-assembly'
     
     input:    
     tuple val(sample), path(bam), path(bai), path(fasta)

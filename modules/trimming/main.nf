@@ -34,6 +34,7 @@ def save_parameters() {
 process trimmomatic {
     // Quality filter and trimming
     publishDir "${params.outdir}/trimming", mode: 'copy'
+    container 'nakor/metagenome-assembly'
     
     input:
     tuple(val(sample), file(fastqs))
@@ -68,6 +69,7 @@ process trimmomatic {
 process fastp {
     // Quality filter and trimming
     publishDir "${params.outdir}/trimming", mode: 'copy'
+    container 'nakor/metagenome-assembly'
     
     input:
     tuple(val(sample), file(fastqs))
@@ -98,6 +100,7 @@ process fastp {
 
 process fastqc {
     publishDir "${params.outdir}/${task.process.replaceAll(':', '/')}", pattern: "*.html", mode: 'copy'
+    container 'nakor/metagenome-assembly'    
     
     input:
     tuple val(sample), file(fastq)
@@ -113,6 +116,7 @@ process fastqc {
 
 process multiqc {
     publishDir "${params.outdir}/${task.process.replaceAll(':', '/')}", pattern: "*.html", mode: 'copy'
+    container 'nakor/metagenome-assembly'
     
     input:
     file(fastqs)

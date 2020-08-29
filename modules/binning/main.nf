@@ -3,7 +3,8 @@ nextflow.enable.dsl = 2
 process coconet {
     errorStrategy 'ignore'
     publishDir "${params.outdir}/coconet", mode: 'copy'
-
+    container 'nakor/metagenome-assembly'
+    
     input:
     file(fasta)
     file(bam)
@@ -21,7 +22,8 @@ process coconet {
 
 process metabat2 {
     publishDir "${params.outdir}/metabat2", mode: 'copy'
-
+    container 'nakor/metagenome-assembly'
+    
     input:
     file(fasta)
     file(bam)

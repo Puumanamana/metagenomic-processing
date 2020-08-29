@@ -5,38 +5,7 @@ include { assembly } from './modules/assembly/main.nf' addParams(outdir: "${para
 include { coverage; aln_stats } from './modules/coverage/main.nf' addParams(outdir: "${params.outdir}/coverage")
 include { annotation } from './modules/annotation/main.nf' addParams(outdir: "${params.outdir}/annotation")
 include { binning } from './modules/binning/main.nf' addParams(outdir: "${params.outdir}/binning")
-
-process reshape_summary {
-    publishDir params.outdir
-
-    input:
-    file(summary)
-
-    output:
-    file('summary_table.csv')
-
-    script:
-    """
-    #!/usr/bin/env python3
-    import pandas as pd
-
-    def format_nb(n):
-        if pd.isnull(n) or n<1000:
-            return n
-        return '{:,}k'.format(int(n/1000))
-
-    table = pd.read_csv("${summary}", index_col=0, header=None, names=['step', 'sample', 'count'])
-    
-    table = (table.drop('bwa').dropna(axis=1, how='all')
-        .pivot('sample', 'step', 'count')
-        .reindex(columns=table.step.unique())
-        .applymap(format_nb))
-
-    table.loc['bwa'].rename(columns=['min_length', 'min_qual', 'flags'])
-
-    table.to_csv('summary_table.csv')
-    """
-}
+include { reshape_summary } from './modules/misc/main.nf'
 
 workflow wgs_analysis {
     take: reads
